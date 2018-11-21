@@ -334,9 +334,9 @@ namespace PortableVM.Libs
             //share memory and code with new VM
             nVm.code = vm.code;
             nVm.Tags["parentVM"] = this;
-            nVm.onUnknownInstruction += delegate (VM sender, List<DynamicValue> arguments2, List<DynamicValue> solvedArgs2,ref int nextIp2, out bool allowContinue)
+            nVm.onUnknownInstruction += delegate (VM sender, string instruction, List<DynamicValue> arguments2, List<DynamicValue> solvedArgs2,ref int nextIp2, out bool allowContinue)
             {
-                return ((VM)sender.Tags["parentVM"]).InvokeOnUnknownFunction(sender, arguments2, solvedArgs2, ref nextIp2, out allowContinue);
+                return ((VM)sender.Tags["parentVM"]).InvokeOnUnknownFunction(sender, instruction, arguments2, solvedArgs2, ref nextIp2, out allowContinue);
             };
             
             nVm.namedCodePointers = vm.namedCodePointers;

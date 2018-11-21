@@ -14,7 +14,7 @@ namespace PortableVM
         public const string _RESULT = "_return";
     }
     
-    public delegate object OnUnknownInstruction(VM sender, List<DynamicValue> rawArguments, List<DynamicValue> solvedArgs, ref int nextIp, out bool allowContinue);
+    public delegate object OnUnknownInstruction(VM sender, string instruction, List<DynamicValue> rawArguments, List<DynamicValue> solvedArgs, ref int nextIp, out bool allowContinue);
     
     public class VM
     {
@@ -223,10 +223,10 @@ namespace PortableVM
                     ok =  true;
                 }
                 else 
-                    result = this.InvokeOnUnknownFunction(this, instruction.arguments, solvedArgs, ref nextIp, out ok);
+                    result = this.InvokeOnUnknownFunction(this, instruction.lib + "." + instruction.instruction, instruction.arguments, solvedArgs, ref nextIp, out ok);
             }
             else 
-                result = this.InvokeOnUnknownFunction(this, instruction.arguments, solvedArgs, ref nextIp, out ok);
+                result = this.InvokeOnUnknownFunction(this, instruction.lib + "." + instruction.instruction, instruction.arguments, solvedArgs, ref nextIp, out ok);
             
             if (result != null)
             {
@@ -239,10 +239,10 @@ namespace PortableVM
             return ok;
         }
 
-        public object InvokeOnUnknownFunction(VM sender, List<DynamicValue> rawArguments, List<DynamicValue> solvedArgs, ref int nextIp, out bool allowContinue)
+        public object InvokeOnUnknownFunction(VM sender, string instruction, List<DynamicValue> rawArguments, List<DynamicValue> solvedArgs, ref int nextIp, out bool allowContinue)
         {
             if (this.onUnknownInstruction != null)
-                return onUnknownInstruction.Invoke(this, rawArguments, solvedArgs, ref nextIp, out allowContinue);
+                return onUnknownInstruction.Invoke(this, instruction, rawArguments, solvedArgs, ref nextIp, out allowContinue);
             
             allowContinue = false;
             return null;
