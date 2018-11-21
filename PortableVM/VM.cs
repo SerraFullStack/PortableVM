@@ -20,7 +20,7 @@ namespace PortableVM
     {
         public event OnUnknownInstruction onUnknownInstruction;
         public List<Instruction> code = new List<Instruction>();
-        public Dictionary<string, List<int>> namedCodePointers = new Dictionary<string, List<int>>();
+        public Dictionary<string, List<NamedCodeRef>> namedCodePointers = new Dictionary<string, List<NamedCodeRef>>();
         private Dictionary<string, Lib> libs = new Dictionary<string, Lib>();
         public Dictionary<string, DynamicValue> VarsMemory = new Dictionary<string, DynamicValue>();
         
@@ -73,10 +73,18 @@ namespace PortableVM
                     if ((currLine[0].ToLower() == "_nc_") || (currLine[0].ToLower() == ":"))
                     {
                         string nc = currLine[1].ToLower();
-                        if (!namedCodePointers.ContainsKey(nc))
-                            namedCodePointers[nc] = new List<int>();
                         
-                        namedCodePointers[nc].Add(code.Count);
+                        NamedCodeRef temp = new NamedCodeRef();
+                        temp.name = nc;
+                        temp.address = code.Count();
+                        //add parameters names
+                        for (int ca = 2; ca < currLine.Count; ca++)
+                            temp.argumentsNames.Add(currLine[ca]);
+                        
+                        if (!namedCodePointers.ContainsKey(nc))
+                            namedCodePointers[nc] = new List<NamedCodeRef>();
+                        
+                        namedCodePointers[nc].Add(temp);
                             
                         
                     }
@@ -351,5 +359,14 @@ namespace PortableVM
         }
 
 
+    }
+    
+    
+    public class NamedCodeRef
+    {
+        public string name;
+        public int address;
+        public List<string> argumentsNames = new List<string>();
+        
     }
 }
