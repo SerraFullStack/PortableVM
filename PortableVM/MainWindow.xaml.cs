@@ -61,7 +61,6 @@ namespace PortableVM
                 "     set countTotal _return",
                 "     goto \"start\"",
                 "_nc_ end",   
-                "Ui.MessageBox countTotal",
                 "finish"
             });
             

@@ -247,14 +247,21 @@ namespace PortableVM
             allowContinue = false;
             return null;
         }
+        
+        
+        public string currentVarContext = "root";
         public void SetVar(string varName, DynamicValue value)
         {
+            if (varName[0] == 'l' && varName.Length > 1 && varName[1] == '_')
+                varName = currentVarContext + "." + varName;
+            
             varName = varName.ToLower();
             VarsMemory[varName] = new DynamicValue(value.get());
         }
 
         public DynamicValue GetVar(string varName, DynamicValue def = null)
         {
+            varName = varName.ToLower();
             if (varName.StartsWith("\""))
             {
                 string result = varName.Substring(1);
@@ -266,6 +273,20 @@ namespace PortableVM
                 return new DynamicValue(result);
             }
                  
+            if (varName[0] == 'l' && varName.Length > 1 && varName[1] == '_')
+            {
+                var currCtx = currentVarContext.ToLower();
+                while (currCtx != "")
+                {
+                    if (VarsMemory.ContainsKey(currCtx + '.'+varName))
+                        return VarsMemory[currCtx + '.' + varName];
+                    else if (currCtx.Contains('.'))
+                        currCtx = currCtx.Substring(0, currCtx.LastIndexOf('.'));
+                    else
+                        currCtx = "";
+                }
+            }
+            
             varName = varName.ToLower();
             if (VarsMemory.ContainsKey(varName))
                 return VarsMemory[varName];

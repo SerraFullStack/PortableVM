@@ -92,6 +92,9 @@ namespace PortableVM.Libs
         
         public object Call(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
+            
+            vm.currentVarContext += "." + solvedArgs[0];
+            
             stack.Push(nextIp);
             this.Goto(arguments, solvedArgs, ref nextIp);
             return null;
@@ -99,8 +102,9 @@ namespace PortableVM.Libs
         
         public object Return(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
-            /*if (stack.Count == 0)
-                throw new Exception("Cannot return, stack is empty");*/
+            if (vm.currentVarContext.Contains('.'))
+                vm.currentVarContext = vm.currentVarContext.Substring(0, vm.currentVarContext.LastIndexOf('.'));
+                
             
             if (stack.Count == 0)
                 nextIp = int.MaxValue;
