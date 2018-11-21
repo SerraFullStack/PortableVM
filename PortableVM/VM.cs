@@ -14,13 +14,19 @@ namespace PortableVM
         public const string _RESULT = "_return";
     }
     
+    public delegate object OnUnknownInstruction(VM sender, List<DynamicValue> rawArguments, List<DynamicValue> solvedArgs, ref int nextIp, out bool allowContinue);
     
     public class VM
     {
-        public event LibInstruction onUnknownInstruction;
+        public event OnUnknownInstruction onUnknownInstruction;
         public List<Instruction> code = new List<Instruction>();
         public Dictionary<string, List<int>> namedCodePointers = new Dictionary<string, List<int>>();
-        public VM(LibInstruction onUnknownInstruction = null)
+        private Dictionary<string, Lib> libs = new Dictionary<string, Lib>();
+        public Dictionary<string, DynamicValue> VarsMemory = new Dictionary<string, DynamicValue>();
+        
+        public Dictionary<string, object> Tags = new Dictionary<string, object>();
+        
+        public VM(OnUnknownInstruction onUnknownInstruction = null)
         {
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
@@ -28,7 +34,7 @@ namespace PortableVM
             startLibs();            
         }
         
-        public VM(string filename, LibInstruction onUnknownInstruction = null)
+        public VM(string filename, OnUnknownInstruction onUnknownInstruction = null)
         {
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
@@ -39,7 +45,7 @@ namespace PortableVM
             this.Run();
         }
 
-        public VM(string[] lines, LibInstruction onUnknownInstruction = null)
+        public VM(string[] lines, OnUnknownInstruction onUnknownInstruction = null)
         {
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
@@ -104,8 +110,14 @@ namespace PortableVM
             {
                 if (opened)
                 {
-                    if ((curr != '"') || (oldCur != '\\'))
+                    if ((curr != '"') || (oldCur == '\\'))
                     {
+                        if ((curr == '\\') && (oldCur != '\\'))
+                        {
+                            oldCur = curr;
+                            continue;
+                        }
+                        
                         currData += curr;
                     }
                     else
@@ -113,8 +125,15 @@ namespace PortableVM
                 }
                 else
                 {
-                    if ((curr != '"') || (oldCur != '\\'))
-                    {
+                    
+                    if ((curr != '"') || (oldCur == '\\'))
+                    {    
+                        if ((curr == '\\') && (oldCur != '\\'))
+                        {
+                            oldCur = curr;
+                            continue;
+                        }
+                        
                         if (curr != splitBy)
                         {
                             currData += curr;
@@ -133,7 +152,9 @@ namespace PortableVM
             }
 
             if (currData != "")
+            {
                 result.Add(currData);
+            }
 
             return result;
 
@@ -175,11 +196,11 @@ namespace PortableVM
         }
 
 
-        private Dictionary<string, Lib> libs = new Dictionary<string, Lib>();
+        
         
         public Dictionary<string, Lib>GetLibs(){return this.libs; }
         
-        public Dictionary<string, DynamicValue> variables = new Dictionary<string, DynamicValue>();
+        
         private bool RunInstruction(Instruction instruction, ref int nextIp)
         {
 
@@ -201,18 +222,11 @@ namespace PortableVM
                     
                     ok =  true;
                 }
-                else if (this.onUnknownInstruction != null)
-                {
-                    result = onUnknownInstruction.Invoke(instruction.arguments, solvedArgs, ref nextIp);
-                    ok = true;
-                }
+                else 
+                    result = this.InvokeOnUnknownFunction(this, instruction.arguments, solvedArgs, ref nextIp, out ok);
             }
-            else if (this.onUnknownInstruction != null)
-            {
-                result = onUnknownInstruction.Invoke(instruction.arguments, solvedArgs, ref nextIp);
-                ok = true;
-            }
-            //try send current instruction back to Application
+            else 
+                result = this.InvokeOnUnknownFunction(this, instruction.arguments, solvedArgs, ref nextIp, out ok);
             
             if (result != null)
             {
@@ -221,13 +235,22 @@ namespace PortableVM
                 else
                     SetVar(Consts._RESULT, new DynamicValue(result));
             }
+            
             return ok;
         }
 
+        public object InvokeOnUnknownFunction(VM sender, List<DynamicValue> rawArguments, List<DynamicValue> solvedArgs, ref int nextIp, out bool allowContinue)
+        {
+            if (this.onUnknownInstruction != null)
+                return onUnknownInstruction.Invoke(this, rawArguments, solvedArgs, ref nextIp, out allowContinue);
+            
+            allowContinue = false;
+            return null;
+        }
         public void SetVar(string varName, DynamicValue value)
         {
             varName = varName.ToLower();
-            variables[varName] = new DynamicValue(value.get());
+            VarsMemory[varName] = new DynamicValue(value.get());
         }
 
         public DynamicValue GetVar(string varName, DynamicValue def = null)
@@ -244,11 +267,13 @@ namespace PortableVM
             }
                  
             varName = varName.ToLower();
-            if (variables.ContainsKey(varName))
-                return variables[varName];
+            if (VarsMemory.ContainsKey(varName))
+                return VarsMemory[varName];
             else
                 return def;
         }
+        
+        
         
     }
 

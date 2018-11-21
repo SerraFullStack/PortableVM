@@ -51,48 +51,38 @@ namespace PortableVM.Libs
         public object Eval(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
         {
             string namedCode = (string)this.GetNewId(arguments, solvedArgs, ref nextIp);
+            string evalLine = "";
+            foreach (var c in solvedArgs)
+                evalLine += c.AsString;
+            
+            evalLine = evalLine.Replace("\r", "\n").Replace("\n\n", "\n");
+            
             
             List<string> newCode = new List<string>();
-            newCode.Add("_nc_ " + newCode);
-            newCode.AddRange(solvedArgs[0].AsString.Replace("\r", "\n").Replace("\n\n", "\n").Split('\n'));
+            newCode.Add("_nc_ " + namedCode);
+            newCode.AddRange(evalLine.Split('\n'));
             newCode.Add("return");
+            
             vm.addCode(newCode);
             
             
             List<DynamicValue>callArgs = new List<DynamicValue>(){
-                new DynamicValue(newCode)
+                new DynamicValue(namedCode)
             };
             this.Call(callArgs, callArgs, ref nextIp);
             
             
-            vm.SetVar(arguments[0].AsString, solvedArgs[1]);
             return null;
         }
 
         public object Goto(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
             string gotoName = solvedArgs[0].AsString;
-            
+            int newIpPointer = this.GetLabelAddress(gotoName, vm.ip);
             //identify closest namedeCode from currentIp
-            if (vm.namedCodePointers.ContainsKey(solvedArgs[0].AsString.ToLower()))
+            if (newIpPointer > -1)
             {
-                int closest = nextIp;
-                int distance = int.MaxValue;
-                foreach (var c in vm.namedCodePointers[solvedArgs[0].AsString.ToLower()])
-                {
-                   if (System.Math.Abs(c - nextIp) < distance)
-                   {
-                       closest = c;
-                       distance = System.Math.Abs(c - nextIp);
-                   }
-                }
-                
-                if (distance != int.MaxValue)
-                {
-                    nextIp = closest;
-                }
-                else
-                    throw(new Exception("Could not possibe determine the position of named code "+solvedArgs[0]));
+                nextIp = newIpPointer;
             }
             else
                 throw(new Exception("Could not possibe determine the position of named code "+solvedArgs[0]));
@@ -109,6 +99,12 @@ namespace PortableVM.Libs
         
         public object Return(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
+            /*if (stack.Count == 0)
+                throw new Exception("Cannot return, stack is empty");*/
+            
+            if (stack.Count == 0)
+                nextIp = int.MaxValue;
+            
             nextIp = stack.Pop();
             
             if (solvedArgs.Count > 0)
@@ -327,6 +323,60 @@ namespace PortableVM.Libs
         {
             idCount++;
             return DateTime.Now.ToString("yyyyMMddHHmmss") + DateTime.Now.Millisecond + idCount;
+        }
+        
+        public object StarThread(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
+        {
+            //creat a new VM
+            
+            VM nVm = new VM();
+            
+            //share memory and code with new VM
+            nVm.code = vm.code;
+            nVm.Tags["parentVM"] = this;
+            nVm.onUnknownInstruction += delegate (VM sender, List<DynamicValue> arguments2, List<DynamicValue> solvedArgs2,ref int nextIp2, out bool allowContinue)
+            {
+                return ((VM)sender.Tags["parentVM"]).InvokeOnUnknownFunction(sender, arguments2, solvedArgs2, ref nextIp2, out allowContinue);
+            };
+            
+            nVm.namedCodePointers = vm.namedCodePointers;
+            
+            //first argument contains the label To Run
+            string labelName = solvedArgs[0].AsString;
+            nVm.ip = GetLabelAddress(labelName, 0);
+            if (nVm.ip == -1)
+                nVm.ip = 0;
+            
+            //run new vm
+            nVm.Run();
+            
+            return null;
+        }
+        
+        public int GetLabelAddress(string labelName, int currentIp)
+        {
+            labelName = labelName.ToLower();
+            //identify closest namedeCode from currentIp
+            if (vm.namedCodePointers.ContainsKey(labelName))
+            {
+                int closest = -1;
+                int distance = int.MaxValue;
+                foreach (var c in vm.namedCodePointers[labelName])
+                {
+                   if (System.Math.Abs(c - currentIp) < distance)
+                   {
+                       closest = c;
+                       distance = System.Math.Abs(c - currentIp);
+                   }
+                }
+                
+                if (distance != int.MaxValue)
+                {
+                    return closest;
+                }
+            }
+            
+            return -1;
         }
 
         
