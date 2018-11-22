@@ -102,7 +102,7 @@ namespace PortableVM.Libs
         public object Call(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
             //create a new memory table
-            vm.VarsMemory.Push(new Dictionary<string, DynamicValue>());
+            vm.VarsMemory.Add(new Dictionary<string, DynamicValue>());
             
             
             stack.Push(nextIp);
@@ -115,7 +115,9 @@ namespace PortableVM.Libs
             
             //remove last memory table
             if (vm.VarsMemory.Count > 0)
-                vm.VarsMemory.Pop();
+            {
+                vm.VarsMemory.RemoveAt(vm.VarsMemory.Count-1);
+            }
             
             if (stack.Count == 0)
                 nextIp = int.MaxValue;

@@ -35,7 +35,7 @@ namespace PortableVM
         
         //the vars memory contains a list of memory tables. Each "call" instruction is called, a new memory table is
         //added to the VarsMemory to create a contextual variables. This allow local variables.
-        public Stack<Dictionary<string, DynamicValue>> VarsMemory = new Stack<Dictionary<string, DynamicValue>>();
+        public List<Dictionary<string, DynamicValue>> VarsMemory = new List<Dictionary<string, DynamicValue>>();
         
         //must contains extra class properties.
         public Dictionary<string, object> Tags = new Dictionary<string, object>();
@@ -73,6 +73,7 @@ namespace PortableVM
         {
             this.libs["standard"] = new Libs.Standard() { vm = this };
             this.libs["math"] = new Libs.Math() { vm = this };
+            this.libs["object"] = new Libs.Object() { vm = this };
         }
 
         public void addCode(List<string> lines)
@@ -246,7 +247,7 @@ namespace PortableVM
         /// <param name="instruction">The instruction to be executed</param>
         /// <param name="nextIp">The reference to a variable that will receive a next value to Instruction Pointer. This parameter exists why some instruction may change the current position of execution</param>
         /// <returns></returns>
-        private bool RunInstruction(Instruction instruction, ref int nextIp)
+        public bool RunInstruction(Instruction instruction, ref int nextIp)
         {
 
             object result = null;
@@ -300,11 +301,11 @@ namespace PortableVM
         }
         
         
-        public void SetVar(string varName, DynamicValue value)
+        public void SetVar(string varName, DynamicValue value, int specifyContextLevel = -1)
         {
             varName = varName.ToLower();
             if (VarsMemory.Count == 0)
-                VarsMemory.Push(new Dictionary<string, DynamicValue>());
+                VarsMemory.Add(new Dictionary<string, DynamicValue>());
             
             if (varName[0] == '_')
             {
@@ -312,9 +313,12 @@ namespace PortableVM
                 VarsMemory.ElementAt(0)[varName] = value;
             }
             else
-            {;
+            {
                 //add the variable to last memoryTable
-                VarsMemory.Last()[varName] = value;
+                if (specifyContextLevel == -1)
+                    VarsMemory.Last()[varName] = value;
+                else
+                    VarsMemory.ElementAt(specifyContextLevel)[varName] = value;
             }
         }
 
@@ -349,9 +353,15 @@ namespace PortableVM
                 int currVarsMemoryPos = VarsMemory.Count-1;
                 while (currVarsMemoryPos >= 0)
                 {
+                    var temp = VarsMemory.ElementAt(currVarsMemoryPos);
                     //loking by variable in all memory tables (in descent order)
-                    if (VarsMemory.ElementAt(currVarsMemoryPos).ContainsKey(varName))
-                        return VarsMemory.ElementAt(currVarsMemoryPos)[varName];
+                    //if (VarsMemory.ElementAt(currVarsMemoryPos).ContainsKey(varName))
+                    if (temp.ContainsKey(varName))
+                    {
+                        //return VarsMemory.ElementAt(currVarsMemoryPos)[varName];
+                        
+                        return temp[varName];
+                    }
                     
                     currVarsMemoryPos--;
                 }
@@ -383,7 +393,9 @@ namespace PortableVM
 
         public void set(object value)
         {
-            if (!(value is string))
+            if (value == null)
+                this._value = null;
+            else if (!(value is string))
                 this._value = value.ToString();
             else
                 this._value = (string)value;

@@ -57,6 +57,7 @@
     </ApplicationDefinition>
     <Compile Include="Lib.cs" />
     <Compile Include="Libs\Math.cs" />
+    <Compile Include="Libs\Object.cs" />
     <Compile Include="Libs\Standard.cs" />
     <Compile Include="VM.cs" />
     <Page Include="MainWindow.xaml">

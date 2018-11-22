@@ -1,0 +1,155 @@
+﻿/*
+ * Created by SharpDevelop.
+ * User: rafael.tonello
+ * Date: 22/11/2018
+ * Time: 09:19
+ * 
+ * To change this template use Tools | Options | Coding | Edit Standard Headers.
+ */
+using System;
+using System.Collections.Generic;
+
+namespace PortableVM.Libs
+{
+    /// <summary>
+    /// Description of Object.
+    /// </summary>
+    public class Object: Lib
+    {
+        public Object()
+        {
+            Standard.autoParseCSharpLib(this, this.instructions);
+        }
+        
+        //create ClassName variableName constructor_arg1 constructor_ar2
+        public object Create(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            string className = arguments[0].AsString;
+            string objectId = (string)((Standard)vm.GetLibs()["standard"]).GetNewId(arguments, solvedArgs, ref nextIp);
+            //store the object id in the sugested variable (argument 1)
+            vm.SetVar(arguments[1].AsString, new DynamicValue(objectId));
+            //store metadata about object
+                //store the object className
+                vm.SetVar(objectId + ".className", new DynamicValue(className));
+                
+                //store the level of object (in context)
+                vm.SetVar(objectId + ".objectLevel", new DynamicValue(vm.VarsMemory.Count-1));
+                
+                //prepare the constructor arguments (reuse the arguments and solvedArgs)
+                
+                //add reference to this as first constructor argument
+                arguments[0].AsString = objectId;
+                solvedArgs[0].AsString = objectId;
+                
+                
+                //checks if exists a named code called className + ".constructor" or (classname + "." + className)
+                if (vm.namedCodePointers.ContainsKey(className + ".constructor"))
+                {
+                    //replace seconds value of arguments with the named code indentification
+                    arguments[1].AsString = "constructor";
+                    solvedArgs[1].AsString = "constructor";
+                    
+                    //Call the "call" of this class
+                    this.Call(arguments, solvedArgs, ref nextIp);
+                }
+                else if (vm.namedCodePointers.ContainsKey(className + "."+className))
+                {
+                    //replace seconds value of arguments with the named code indentification
+                    arguments[1].AsString = className;
+                    solvedArgs[1].AsString = className;
+                    
+                    //Call the "call" of this class
+                    this.Call(arguments, solvedArgs, ref nextIp);
+                }
+                
+            return objectId;
+        }
+        
+        public object SetProperty(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            //get the object identification
+            string objectId = solvedArgs[0].AsString;
+            
+            //gets the object level
+            int objectLevel = vm.GetVar(objectId + ".objectLevel", new DynamicValue(0)).AsInt;
+            
+            //set a property named objectId + "." + arguments[0] (use the same context level of object)
+            vm.SetVar(objectId + "." + arguments[1].AsString, solvedArgs[2], objectLevel);
+            
+            return null;
+        }
+        
+        public object GetProperty(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            //get the object identification
+            string objectId = solvedArgs[0].AsString;
+            
+            //set a property named objectId + "." + arguments[0] (use the same context level of object)
+            return vm.GetVar(objectId + "." + arguments[1].AsString, new DynamicValue(null));
+            
+            return null;
+        }
+        
+        public object Call(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            //get the object identification
+            string objectId = solvedArgs[0].AsString;
+            
+            //get the object className
+            vm.GetVar(objectId + ".className", new DynamicValue(""));
+            string className = solvedArgs[1].AsString;
+            
+            //determine the real namedCode (class name + namedCode)
+            string NamedCodeToCall = className + "." + solvedArgs[1];
+            solvedArgs[0].AsString = NamedCodeToCall;
+            arguments[0].AsString = NamedCodeToCall;
+            
+            //the second argument must be a pointer to object
+            solvedArgs[1].AsString = objectId;
+            arguments[1].AsString = objectId;
+                
+            return ((Standard)vm.GetLibs()["standard"]).Call(arguments, solvedArgs, ref nextIp);
+        }
+        
+        public object Serialize(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            return null;
+            
+        }
+        
+        public object Deserialize(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            return null;
+        }
+        
+        public object Run(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            string objectId = solvedArgs[0].AsString;
+            //in all arguments, replace the "this" keyword by current objectId
+            
+            for (int count = 0; count < arguments.Count; count++)
+                arguments[count].AsString = arguments[count].AsString.Replace("this", objectId).Replace("self", objectId);
+            
+            //create a new instruction
+            Instruction nI = new Instruction();
+            
+            //create a new Instruction object to contains the instructin information
+            nI.instruction = arguments[0].AsString.ToLower();
+            nI.lib = "standard";
+                                                
+            if (nI.instruction.Contains("."))
+            {
+                nI.lib = nI.instruction.Substring(0, nI.instruction.IndexOf('.'));
+                nI.instruction = nI.instruction.Substring(nI.instruction.IndexOf('.') + 1);
+            }
+            nI.arguments = arguments;
+            nI.arguments.RemoveAt(0);
+            
+            //run the instruction in the vm
+            vm.RunInstruction(nI, ref nextIp);
+            
+            return vm.GetVar("_return", new DynamicValue(null));
+        }
+        
+    }
+}

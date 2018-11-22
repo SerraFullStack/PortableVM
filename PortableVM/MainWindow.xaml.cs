@@ -48,7 +48,7 @@ namespace PortableVM
                 
             };
             
-            a.addCode(new List<string>
+            /*a.addCode(new List<string>
             {
                 "set i 100000",
                 "set countTotal 0",
@@ -75,6 +75,21 @@ namespace PortableVM
                             ".\nThe 'countTotal' variable is "+a.GetVar("countTotal", new DynamicValue("Error")).AsString +
                             "\n The total of runned instruction are: "+a.totalRunnedInstructions +         
                             "\nThe VM speed is "+speed+" instructions by second");
+            */
+           
+           a.addCode(new List<string>
+            {
+                "object.create \"object\" teste",
+                "ui.messagebox teste",
+                "object.setProperty teste prop \"cool\"",
+                "eval \"ui.messagebox \" teste \".prop\"",
+                "object.getProperty teste prop",
+                "ui.messagebox _return",
+                   
+                "finish"
+            });
+           
+           a.Run(true);
         }
         
     }
