@@ -101,8 +101,8 @@ namespace PortableVM.Libs
         
         public object Call(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
-            
-            vm.currentVarContext += "." + solvedArgs[0];
+            //create a new memory table
+            vm.VarsMemory.Push(new Dictionary<string, DynamicValue>());
             
             
             stack.Push(nextIp);
@@ -112,9 +112,10 @@ namespace PortableVM.Libs
         
         public object Return(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
-            if (vm.currentVarContext.Contains('.'))
-                vm.currentVarContext = vm.currentVarContext.Substring(0, vm.currentVarContext.LastIndexOf('.'));
-                
+            
+            //remove last memory table
+            if (vm.VarsMemory.Count > 0)
+                vm.VarsMemory.Pop();
             
             if (stack.Count == 0)
                 nextIp = int.MaxValue;

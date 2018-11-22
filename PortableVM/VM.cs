@@ -18,12 +18,26 @@ namespace PortableVM
     
     public class VM
     {
+        //this event will be executed when an instruction is not recognized by the VM. This can be used
+        //to extendends the instruction set with function in the application.
         public event OnUnknownInstruction onUnknownInstruction;
-        public List<Instruction> code = new List<Instruction>();
-        public Dictionary<string, List<NamedCodeRef>> namedCodePointers = new Dictionary<string, List<NamedCodeRef>>();
-        private Dictionary<string, Lib> libs = new Dictionary<string, Lib>();
-        public Dictionary<string, DynamicValue> VarsMemory = new Dictionary<string, DynamicValue>();
         
+        //Contains the processed code
+        public List<Instruction> code = new List<Instruction>();
+        
+        //Contains a list of labels (named codes) and theis positions in the 'code' List. This is used by
+        //the Standart.goto instruction to locate positions of labels
+        public Dictionary<string, List<NamedCodeRef>> namedCodePointers = new Dictionary<string, List<NamedCodeRef>>();
+        
+        //contains a list of library pointers. When a new library is developed, you must to add this to
+        //StartLibs method of this class.
+        private Dictionary<string, Lib> libs = new Dictionary<string, Lib>();
+        
+        //the vars memory contains a list of memory tables. Each "call" instruction is called, a new memory table is
+        //added to the VarsMemory to create a contextual variables. This allow local variables.
+        public Stack<Dictionary<string, DynamicValue>> VarsMemory = new Stack<Dictionary<string, DynamicValue>>();
+        
+        //must contains extra class properties.
         public Dictionary<string, object> Tags = new Dictionary<string, object>();
         
         public VM(OnUnknownInstruction onUnknownInstruction = null)
@@ -31,7 +45,7 @@ namespace PortableVM
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
 
-            startLibs();            
+            startLibs();
         }
         
         public VM(string filename, OnUnknownInstruction onUnknownInstruction = null)
@@ -65,19 +79,28 @@ namespace PortableVM
         {
             List<string> currLine;
             Instruction currInstruction;
+            
+            //scrools through the lines
             foreach (var curr in lines)
             {
+                //split the line by ' ' (space)
                 currLine = Split(curr.TrimStart().TrimEnd().Trim(), ' ');
                 if (currLine.Count > 0)
                 {
+                    //checks if current line is a named code (label)
                     if ((currLine[0].ToLower() == "_nc_") || (currLine[0].ToLower() == ":"))
                     {
+                        //extract the name of code
                         string nc = currLine[1].ToLower();
                         
+                        //create a namedCodeRef to contains the named code information
                         NamedCodeRef temp = new NamedCodeRef();
                         temp.name = nc;
                         temp.address = code.Count();
-                        //add parameters names
+                        
+                        //parameters can be used with named code. To do this, programmers just add the parameters names after
+                        //the code name (Ex.: _nc_ myLabel parameter1 parameter2). The code bellow casts the parameters passed to
+                        //"goto" instruction to these parameters names
                         for (int ca = 2; ca < currLine.Count; ca++)
                             temp.argumentsNames.Add(currLine[ca]);
                         
@@ -85,23 +108,29 @@ namespace PortableVM
                             namedCodePointers[nc] = new List<NamedCodeRef>();
                         
                         namedCodePointers[nc].Add(temp);
-                            
+                        
                         
                     }
+                    //checks if the line is a comment or just strutural code
                     else if ((currLine[0] != "") && (!@"#/\;".Contains(currLine[0][0])))
                     {
+                        //create a new Instruction object to contains the instructin information
                         currInstruction = new Instruction();
                         currInstruction.instruction = currLine[0].ToLower();
+                        //set the default library as "standart" and check if the programmer was informed the library. In true case,
+                        //just identify and replace the libraryName.
                         currInstruction.lib = "standard";
                         if (currInstruction.instruction.Contains("."))
                         {
                             currInstruction.lib = currInstruction.instruction.Substring(0, currInstruction.instruction.IndexOf('.'));
                             currInstruction.instruction = currInstruction.instruction.Substring(currInstruction.instruction.IndexOf('.') + 1);
                         }
-                    
+                        
+                        //take the instruction arguments
                         for (int cont = 1; cont < currLine.Count; cont++)
                             currInstruction.arguments.Add(new DynamicValue(currLine[cont]));
 
+                        //added the parsed instruction to "code" list.
                         code.Add(currInstruction);
                     }
                 }
@@ -135,7 +164,7 @@ namespace PortableVM
                 {
                     
                     if ((curr != '"') || (oldCur == '\\'))
-                    {    
+                    {
                         if ((curr == '\\') && (oldCur != '\\'))
                         {
                             oldCur = curr;
@@ -168,32 +197,37 @@ namespace PortableVM
 
         }
 
+        //current instruction pointer
         public int ip = 0;
-        public int totalRunnedInstructions = 0;
+        
+        //contains the amount of runned instructions
+        public UInt64 totalRunnedInstructions = 0;
+        
+        
         public void Run(bool waitEnd = false)
         {
             bool ended = false;
             Thread th = new Thread(delegate ()
-            {
-                int nextIp;
-                this.totalRunnedInstructions = 0;
-                while (ip < code.Count)
-                {
-                    this.totalRunnedInstructions++;
-                    nextIp = ip + 1;
+           {
+               int nextIp;
+               this.totalRunnedInstructions = 0;
+               while (ip < code.Count)
+               {
+                   this.totalRunnedInstructions++;
+                   nextIp = ip + 1;
 
-                    if (RunInstruction(code[ip], ref nextIp))
-                    {
-                        ip = nextIp;
-                    }
-                    else
-                    {
-                        throw new Exception("The instruction "+code[ip].lib+"."+code[ip].instruction+" could not be executed");
-                        break;
-                    }
-                }
-                ended = true;
-            });
+                   if (RunInstruction(code[ip], ref nextIp))
+                   {
+                       ip = nextIp;
+                   }
+                   else
+                   {
+                       throw new Exception("The instruction "+code[ip].lib+"."+code[ip].instruction+" could not be executed");
+                       break;
+                   }
+               }
+               ended = true;
+           });
 
             th.Start();
             
@@ -204,17 +238,20 @@ namespace PortableVM
         }
 
 
-        
-        
         public Dictionary<string, Lib>GetLibs(){return this.libs; }
         
-        
+        /// <summary>
+        /// Run an instruction
+        /// </summary>
+        /// <param name="instruction">The instruction to be executed</param>
+        /// <param name="nextIp">The reference to a variable that will receive a next value to Instruction Pointer. This parameter exists why some instruction may change the current position of execution</param>
+        /// <returns></returns>
         private bool RunInstruction(Instruction instruction, ref int nextIp)
         {
 
             object result = null;
             bool ok = false;
-            //resolve variables
+            //try to solve instruction arguments values
             List<DynamicValue> solvedArgs = new List<DynamicValue>();
             solvedArgs.Clear();
             foreach (var c in instruction.arguments)
@@ -222,20 +259,26 @@ namespace PortableVM
                 solvedArgs.Add(this.GetVar(c.AsString, new DynamicValue(c.AsString)));
             }
             
+            
+            //try to identify the libray
             if (libs.ContainsKey(instruction.lib))
             {
+                //try to identify the instruction
                 if (libs[instruction.lib].instructions.ContainsKey(instruction.instruction.ToLower()))
                 {
+                    //run the instruction
                     result = libs[instruction.lib].instructions[instruction.instruction.ToLower()](instruction.arguments, solvedArgs, ref nextIp);
-                    
                     ok =  true;
                 }
-                else 
+                else
+                    //try run the instruction in the application
                     result = this.InvokeOnUnknownFunction(this, instruction.lib + "." + instruction.instruction, instruction.arguments, solvedArgs, ref nextIp, out ok);
             }
-            else 
+            else
+                //try run the instruction in the application
                 result = this.InvokeOnUnknownFunction(this, instruction.lib + "." + instruction.instruction, instruction.arguments, solvedArgs, ref nextIp, out ok);
             
+            //checks if instruction was returned some value. If true, put this value in _return global variable
             if (result != null)
             {
                 if (result is DynamicValue)
@@ -257,19 +300,28 @@ namespace PortableVM
         }
         
         
-        public string currentVarContext = "root";
         public void SetVar(string varName, DynamicValue value)
         {
-            if (varName[0] == 'l' && varName.Length > 1 && varName[1] == '_')
-                varName = currentVarContext + "." + varName;
-            
             varName = varName.ToLower();
-            VarsMemory[varName] = new DynamicValue(value.get());
+            if (VarsMemory.Count == 0)
+                VarsMemory.Push(new Dictionary<string, DynamicValue>());
+            
+            if (varName[0] == '_')
+            {
+                //uses the root memory table
+                VarsMemory.ElementAt(0)[varName] = value;
+            }
+            else
+            {;
+                //add the variable to last memoryTable
+                VarsMemory.Last()[varName] = value;
+            }
         }
 
         public DynamicValue GetVar(string varName, DynamicValue def = null)
         {
             varName = varName.ToLower();
+            
             if (varName.StartsWith("\""))
             {
                 string result = varName.Substring(1);
@@ -280,26 +332,33 @@ namespace PortableVM
                 
                 return new DynamicValue(result);
             }
-                 
-            if (varName[0] == 'l' && varName.Length > 1 && varName[1] == '_')
+            
+            if (VarsMemory.Count == 0)
+                return def;
+            
+            if (varName[0] == '_')
             {
-                var currCtx = currentVarContext.ToLower();
-                while (currCtx != "")
+                //uses the root memory table
+                if (VarsMemory.ElementAt(0).ContainsKey(varName))
+                    return VarsMemory.ElementAt(0)[varName];
+                else
+                    return def;
+            }
+            else
+            {
+                int currVarsMemoryPos = VarsMemory.Count-1;
+                while (currVarsMemoryPos >= 0)
                 {
-                    if (VarsMemory.ContainsKey(currCtx + '.'+varName))
-                        return VarsMemory[currCtx + '.' + varName];
-                    else if (currCtx.Contains('.'))
-                        currCtx = currCtx.Substring(0, currCtx.LastIndexOf('.'));
-                    else
-                        currCtx = "";
+                    //loking by variable in all memory tables (in descent order)
+                    if (VarsMemory.ElementAt(currVarsMemoryPos).ContainsKey(varName))
+                        return VarsMemory.ElementAt(currVarsMemoryPos)[varName];
+                    
+                    currVarsMemoryPos--;
                 }
+                
+                return def;
             }
             
-            varName = varName.ToLower();
-            if (VarsMemory.ContainsKey(varName))
-                return VarsMemory[varName];
-            else
-                return def;
         }
         
         
