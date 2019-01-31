@@ -37,6 +37,9 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Data" />
+    <Reference Include="System.Web.Extensions">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
     <Reference Include="System.Xml" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Core" />
@@ -56,9 +59,16 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="Lib.cs" />
+    <Compile Include="Libs\Array.cs" />
+    <Compile Include="Libs\Json.cs" />
     <Compile Include="Libs\Math.cs" />
     <Compile Include="Libs\Object.cs" />
+    <Compile Include="Libs\Shared\JsonMaker\JSON.cs" />
+    <Compile Include="Libs\Shared\JsonMaker\Types\FileSystemJsonObject.cs" />
+    <Compile Include="Libs\Shared\JsonMaker\Types\IJSONObject.cs" />
+    <Compile Include="Libs\Shared\JsonMaker\Types\InMemoryJsonObject.cs" />
     <Compile Include="Libs\Standard.cs" />
+    <Compile Include="Libs\String.cs" />
     <Compile Include="VM.cs" />
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -100,6 +110,7 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

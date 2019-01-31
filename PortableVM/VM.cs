@@ -12,6 +12,7 @@ namespace PortableVM
     public abstract class Consts
     {
         public const string _RESULT = "_return";
+        public const string _VMRUNRESULT = "_exitcode";
     }
     
     public delegate object OnUnknownInstruction(VM sender, string instruction, List<DynamicValue> rawArguments, List<DynamicValue> solvedArgs, ref int nextIp, out bool allowContinue);
@@ -39,9 +40,20 @@ namespace PortableVM
         
         //must contains extra class properties.
         public Dictionary<string, object> Tags = new Dictionary<string, object>();
-        
+
+        public static List<VM> vmsPointers = new List<VM>();
+
+        private bool paused = false;
+        private List<Action> onPausedActions = new List<Action>();
+
+        //this flag is used to pause vm execution (when 'Pause' is called, the vm waits for current instruction and pause. When
+        //vm is really paused, the flag 'paused' is setted to true)
+        private bool requestPause = false;
+
+
         public VM(OnUnknownInstruction onUnknownInstruction = null)
         {
+            vmsPointers.Add(this);
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
 
@@ -50,6 +62,7 @@ namespace PortableVM
         
         public VM(string filename, OnUnknownInstruction onUnknownInstruction = null)
         {
+            vmsPointers.Add(this);
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
             
@@ -61,6 +74,7 @@ namespace PortableVM
 
         public VM(string[] lines, OnUnknownInstruction onUnknownInstruction = null)
         {
+            vmsPointers.Add(this);
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
             
@@ -71,9 +85,26 @@ namespace PortableVM
 
         private void startLibs()
         {
+            //create the instances of libs
             this.libs["standard"] = new Libs.Standard() { vm = this };
             this.libs["math"] = new Libs.Math() { vm = this };
             this.libs["object"] = new Libs.Object() { vm = this };
+            this.libs["array"] = new Libs.Array() { vm = this };
+            this.libs["json"] = new Libs.Json() { vm = this };
+            this.libs["string"] = new Libs.String() { vm = this };
+        }
+
+        public void pause(Action onPaused)
+        {
+            this.onPausedActions.Add(onPaused);
+            this.requestPause = true;
+
+        }
+
+        public void resume()
+        {
+            this.requestPause = false;
+            this.paused = false;
         }
 
         public void addCode(List<string> lines)
@@ -82,10 +113,38 @@ namespace PortableVM
             Instruction currInstruction;
             
             //scrools through the lines
-            foreach (var curr in lines)
+            for (int contLines = 0; contLines < lines.Count; contLines++)
             {
+                var curr = lines[contLines];
+
+                //parse ';' (and generate new lines)
+                if (curr.Contains(';'))
+                {
+                    var tempLineList = Split(curr, ";");
+                    curr = tempLineList[0];
+                    for (int c2 = 1; c2 < tempLineList.Count; c2++)
+                        lines.Insert(contLines + c2, tempLineList[c2]);
+                }
+
                 //split the line by ' ' (space)
-                currLine = Split(curr.TrimStart().TrimEnd().Trim(), ' ');
+                currLine = Split(curr.TrimStart().TrimEnd().Trim(), "() ,", false);
+
+
+                //remove possible empty fields
+                for (int c = currLine.Count - 1; c >= 0;c--)
+                {
+                    if (currLine[c] == "")
+                        currLine.RemoveAt(c);
+                }
+
+                //convert attribuitions to normal instruction call + "set [variable] _return"
+                if ((currLine.Count > 1) && (currLine[1] == "="))
+                {
+                    lines.Insert(contLines + 1, "set " + currLine[0] + " _return");
+                    currLine.RemoveAt(0);
+                    currLine.RemoveAt(0);
+                }
+
                 if (currLine.Count > 0)
                 {
                     //checks if current line is a named code (label)
@@ -138,41 +197,46 @@ namespace PortableVM
             }
         }
         
-        private List<string> Split(string data, char splitBy)
+        private List<string> Split(string data, string splitBy, bool removeSpliterChars = true)
         {
             List<string> result = new List<string>();
             bool opened = false;
             string currData = "";
             char oldCur = ' ';
+            char openedWith = '"';
             foreach (var curr in data)
             {
                 if (opened)
                 {
-                    if ((curr != '"') || (oldCur == '\\'))
+                    if ((curr != openedWith) || (oldCur == '\\'))
                     {
                         if ((curr == '\\') && (oldCur != '\\'))
                         {
                             oldCur = curr;
                             continue;
                         }
-                        
+
                         currData += curr;
                     }
                     else
+                    {
+                        if (!removeSpliterChars)
+                            currData += curr;
                         opened = false;
+                    }
                 }
                 else
                 {
-                    
-                    if ((curr != '"') || (oldCur == '\\'))
+
+                    if (((curr != '"') && (curr != '\'') && (curr != '`') && (curr != '´')) || (oldCur == '\\'))
                     {
                         if ((curr == '\\') && (oldCur != '\\'))
                         {
                             oldCur = curr;
                             continue;
                         }
-                        
-                        if (curr != splitBy)
+
+                        if (!splitBy.Contains(curr))
                         {
                             currData += curr;
                         }
@@ -183,7 +247,13 @@ namespace PortableVM
                         }
                     }
                     else
+                    {
+                        if (!removeSpliterChars)
+                            currData += curr;
+
+                        openedWith = curr;
                         opened = true;
+                    }
                 }
 
                 oldCur = curr;
@@ -203,29 +273,46 @@ namespace PortableVM
         
         //contains the amount of runned instructions
         public UInt64 totalRunnedInstructions = 0;
+
         
-        
-        public void Run(bool waitEnd = false)
+        public DynamicValue Run(bool waitEnd = false)
         {
             bool ended = false;
+            this.SetVar(Consts._VMRUNRESULT, new DynamicValue(-1));
+
             Thread th = new Thread(delegate ()
-           {
-               int nextIp;
+            {
                this.totalRunnedInstructions = 0;
+                int nextIp = 0; ;
                while (ip < code.Count)
                {
-                   this.totalRunnedInstructions++;
-                   nextIp = ip + 1;
+                    if (paused)
+                    {
+                        Thread.Sleep(1);
+                        continue;
+                    }
 
-                   if (RunInstruction(code[ip], ref nextIp))
-                   {
-                       ip = nextIp;
-                   }
-                   else
-                   {
-                       throw new Exception("The instruction "+code[ip].lib+"."+code[ip].instruction+" could not be executed");
-                       break;
-                   }
+                    this.totalRunnedInstructions++;
+                    nextIp = ip + 1;
+
+                    if (RunInstruction(code[ip], ref nextIp))
+                    {
+                        ip = nextIp;
+                    }
+                    else
+                    {
+                        throw new Exception("The instruction "+code[ip].lib+"."+code[ip].instruction+" could not be executed");
+                    }
+
+                    if (requestPause)
+                    {
+                        paused = true;
+                        foreach (var c in onPausedActions)
+                            c.Invoke();
+
+                        onPausedActions.Clear();
+
+                    }
                }
                ended = true;
            });
@@ -236,6 +323,8 @@ namespace PortableVM
             {
                 Thread.Sleep(1);
             }
+
+            return this.GetVar(Consts._VMRUNRESULT, new DynamicValue(-1));
         }
 
 
@@ -259,8 +348,7 @@ namespace PortableVM
             {
                 solvedArgs.Add(this.GetVar(c.AsString, new DynamicValue(c.AsString)));
             }
-            
-            
+
             //try to identify the libray
             if (libs.ContainsKey(instruction.lib))
             {
@@ -325,11 +413,12 @@ namespace PortableVM
         public DynamicValue GetVar(string varName, DynamicValue def = null)
         {
             varName = varName.ToLower();
-            
-            if (varName.StartsWith("\""))
+
+            if ("\"'`´".IndexOf(varName[0]) > -1)
             {
+                var starter = varName[0] + "";
                 string result = varName.Substring(1);
-                if (result.EndsWith("\""))
+                if (result.EndsWith(starter))
                     result = result.Substring(0, result.Length-1);
                 
                 result = result.Replace("\\r", "\r").Replace("\\n", "\n").Replace("\\t", "\t").Replace("\\b", " ");
@@ -339,7 +428,11 @@ namespace PortableVM
             
             if (VarsMemory.Count == 0)
                 return def;
-            
+
+            var index = "\"'`´".IndexOf(varName[0]);
+            var character = varName[0];
+
+
             if (varName[0] == '_')
             {
                 //uses the root memory table
@@ -371,6 +464,39 @@ namespace PortableVM
             
         }
         
+        public void DelVar(string varName)
+        {
+            varName = varName.ToLower();
+            
+            if (VarsMemory.Count == 0)
+                return;
+            
+            if (varName[0] == '_')
+            {
+                //uses the root memory table
+                if (VarsMemory.ElementAt(0).ContainsKey(varName))
+                    VarsMemory.ElementAt(0).Remove(varName);
+            }
+            else
+            {
+                int currVarsMemoryPos = VarsMemory.Count-1;
+                while (currVarsMemoryPos >= 0)
+                {
+                    var temp = VarsMemory.ElementAt(currVarsMemoryPos);
+                    //loking by variable in all memory tables (in descent order)
+                    //if (VarsMemory.ElementAt(currVarsMemoryPos).ContainsKey(varName))
+                    if (temp.ContainsKey(varName))
+                    {
+                        temp.Remove(varName);
+                        return;
+                    }
+                    
+                    currVarsMemoryPos--;
+                }
+            }
+            
+        }
+        
         
         
     }
@@ -385,7 +511,7 @@ namespace PortableVM
 
     public class DynamicValue
     {
-        private string _value = "";
+        public string _value = "";
         public DynamicValue(object value)
         {
             this.set(value);

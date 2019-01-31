@@ -40,5 +40,8 @@ namespace PortableVM.Libs
         {
             return solvedArgs[0].AsDouble * solvedArgs[1].AsDouble;
         }
+        
+        
+        
     }
 }

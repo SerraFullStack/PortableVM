@@ -1,0 +1,21 @@
+Object
+	Serialize
+	Deserialize
+
+String
+	Split -> creates an array
+ 
+Array (works with reference (like object)
+	GetLength
+	Clear
+	Append
+	GetAt
+	Copy
+	Move
+	Reverse
+
+Json
+	setProperty
+	getProperty
+	serialize/Export
+	deserialize/Import

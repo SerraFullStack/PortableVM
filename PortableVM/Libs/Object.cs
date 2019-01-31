@@ -78,7 +78,13 @@ namespace PortableVM.Libs
             
             return null;
         }
-        
+
+        public object Set(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            return this.SetProperty(arguments, solvedArgs, ref nextIp);
+
+        }
+
         public object GetProperty(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
         {
             //get the object identification
@@ -86,6 +92,21 @@ namespace PortableVM.Libs
             
             //set a property named objectId + "." + arguments[0] (use the same context level of object)
             return vm.GetVar(objectId + "." + arguments[1].AsString, new DynamicValue(null));
+            
+        }
+
+        public object Get(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            return this.GetProperty(arguments, solvedArgs, ref nextIp);
+        }
+
+        public object DeleteProperty(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            //get the object identification
+            string objectId = solvedArgs[0].AsString;
+            
+            //set a property named objectId + "." + arguments[0] (use the same context level of object)
+            vm.DelVar(objectId + "." + arguments[1].AsString);
             
             return null;
         }
