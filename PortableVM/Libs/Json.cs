@@ -20,12 +20,10 @@ namespace PortableVM.Libs
         {
             string objectId = (string)((Standard)vm.GetLibs()["standard"]).GetNewId(arguments, solvedArgs, ref nextIp);
             this.instances[objectId] = new JSON();
-            var objectLevel = vm.VarsMemory.Count - 1;
-            vm.SetVar(objectId + ".objectLevel", new DynamicValue(objectLevel));
             //store the object id in the sugested variable (argument 1)
             if (arguments.Count > 0)
             {
-                vm.SetVar(arguments[0].AsString, new DynamicValue(objectId), objectLevel);
+                vm.SetVar(arguments[0].AsString, new DynamicValue(objectId), vm.rootContext);
 
                 //store the level of object (in context)
 

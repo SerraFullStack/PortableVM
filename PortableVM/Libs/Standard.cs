@@ -133,7 +133,9 @@ namespace PortableVM.Libs
         public object Call(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
             //create a new memory table
-            vm.VarsMemory.Add(new Dictionary<string, DynamicValue>());
+            vm.curretContext.Next = new VarContext();
+            vm.curretContext.Next.Prev = vm.curretContext;
+            vm.curretContext = vm.curretContext.Next;
             
             
             stack.Push(nextIp);
@@ -143,11 +145,20 @@ namespace PortableVM.Libs
         
         public object Return(List<DynamicValue> arguments, List<DynamicValue> solvedArgs,ref int nextIp)
         {
-            
+
             //remove last memory table
-            if (vm.VarsMemory.Count > 0)
+
+            if (vm.curretContext.Prev != null)
             {
-                vm.VarsMemory.RemoveAt(vm.VarsMemory.Count-1);
+                vm.curretContext = vm.curretContext.Prev;
+
+                //currentContext never can be rootContext
+                if (vm.curretContext == vm.rootContext)
+                    vm.curretContext = new VarContext();
+                else
+                    vm.curretContext.Next.Dispose();
+
+
             }
             
             if (stack.Count == 0)
@@ -411,7 +422,15 @@ namespace PortableVM.Libs
             
             //share memory and code with new VM
             nVm.code = vm.code;
-            nVm.VarsMemory = vm.VarsMemory;
+            nVm.rootContext = vm.rootContext;
+
+            //defining the root context as same of vm.rootContext, the threads can share global vars
+            //but
+            //definig the root context as same of vm.currentContext, the treads share firsts contexts (the new threads will contains a fork of the main thread context)
+            nVm.curretContext = new VarContext();
+            //nVm.curretContext.Prev = vm.rootContext;
+            nVm.curretContext.Prev = vm.curretContext;
+
             nVm.Tags["parentVM"] = vm;
             nVm.onUnknownInstruction += delegate (VM sender, string instruction, List<DynamicValue> arguments2, List<DynamicValue> solvedArgs2,ref int nextIp2, out bool allowContinue)
             {

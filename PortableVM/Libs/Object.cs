@@ -30,10 +30,7 @@ namespace PortableVM.Libs
             vm.SetVar(arguments[1].AsString, new DynamicValue(objectId));
             //store metadata about object
                 //store the object className
-                vm.SetVar(objectId + ".className", new DynamicValue(className));
-                
-                //store the level of object (in context)
-                vm.SetVar(objectId + ".objectLevel", new DynamicValue(vm.VarsMemory.Count-1));
+                vm.SetVar(objectId + ".className", new DynamicValue(className), vm.rootContext);
                 
                 //prepare the constructor arguments (reuse the arguments and solvedArgs)
                 
@@ -70,11 +67,8 @@ namespace PortableVM.Libs
             //get the object identification
             string objectId = solvedArgs[0].AsString;
             
-            //gets the object level
-            int objectLevel = vm.GetVar(objectId + ".objectLevel", new DynamicValue(0)).AsInt;
-            
             //set a property named objectId + "." + arguments[0] (use the same context level of object)
-            vm.SetVar(objectId + "." + arguments[1].AsString, solvedArgs[2], objectLevel);
+            vm.SetVar(objectId + "." + arguments[1].AsString, solvedArgs[2], vm.rootContext);
             
             return null;
         }
@@ -91,7 +85,7 @@ namespace PortableVM.Libs
             string objectId = solvedArgs[0].AsString;
             
             //set a property named objectId + "." + arguments[0] (use the same context level of object)
-            return vm.GetVar(objectId + "." + arguments[1].AsString, new DynamicValue(null));
+            return vm.GetVar(objectId + "." + arguments[1].AsString, new DynamicValue(null), vm.rootContext);
             
         }
 
@@ -106,7 +100,7 @@ namespace PortableVM.Libs
             string objectId = solvedArgs[0].AsString;
             
             //set a property named objectId + "." + arguments[0] (use the same context level of object)
-            vm.DelVar(objectId + "." + arguments[1].AsString);
+            vm.DelVar(objectId + "." + arguments[1].AsString, vm.rootContext);
             
             return null;
         }

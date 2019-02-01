@@ -69,6 +69,7 @@
     <Compile Include="Libs\Shared\JsonMaker\Types\InMemoryJsonObject.cs" />
     <Compile Include="Libs\Standard.cs" />
     <Compile Include="Libs\String.cs" />
+    <Compile Include="VarContext.cs" />
     <Compile Include="VM.cs" />
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>

@@ -34,10 +34,6 @@ namespace PortableVM
         //StartLibs method of this class.
         private Dictionary<string, Lib> libs = new Dictionary<string, Lib>();
         
-        //the vars memory contains a list of memory tables. Each "call" instruction is called, a new memory table is
-        //added to the VarsMemory to create a contextual variables. This allow local variables.
-        public List<Dictionary<string, DynamicValue>> VarsMemory = new List<Dictionary<string, DynamicValue>>();
-        
         //must contains extra class properties.
         public Dictionary<string, object> Tags = new Dictionary<string, object>();
 
@@ -50,9 +46,14 @@ namespace PortableVM
         //vm is really paused, the flag 'paused' is setted to true)
         private bool requestPause = false;
 
-
+        //the next of rootContext doest not handle for anything (is null)
+        public VarContext rootContext = new VarContext();
+        public VarContext curretContext;
         public VM(OnUnknownInstruction onUnknownInstruction = null)
         {
+            curretContext = new VarContext();
+            curretContext.Prev = rootContext;
+
             vmsPointers.Add(this);
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
@@ -62,6 +63,8 @@ namespace PortableVM
         
         public VM(string filename, OnUnknownInstruction onUnknownInstruction = null)
         {
+            curretContext = new VarContext();
+            curretContext.Prev = rootContext;
             vmsPointers.Add(this);
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
@@ -74,6 +77,9 @@ namespace PortableVM
 
         public VM(string[] lines, OnUnknownInstruction onUnknownInstruction = null)
         {
+            curretContext = new VarContext();
+            curretContext.Prev = rootContext;
+
             vmsPointers.Add(this);
             if (onUnknownInstruction != null)
                 this.onUnknownInstruction = onUnknownInstruction;
@@ -387,30 +393,35 @@ namespace PortableVM
             allowContinue = false;
             return null;
         }
+
         
-        
-        public void SetVar(string varName, DynamicValue value, int specifyContextLevel = -1)
+
+        public void SetVar(string varName, DynamicValue value, VarContext context = null)
         {
             varName = varName.ToLower();
-            if (VarsMemory.Count == 0)
-                VarsMemory.Add(new Dictionary<string, DynamicValue>());
-            
+            if (context == null)
+                context = curretContext;
             if (varName[0] == '_')
             {
-                //uses the root memory table
-                VarsMemory.ElementAt(0)[varName] = value;
+                rootContext.Set(varName, value);
             }
-            else
+
+            DynamicValue temp = null;
+            while (context != null)
             {
-                //add the variable to last memoryTable
-                if (specifyContextLevel == -1)
-                    VarsMemory.Last()[varName] = value;
-                else
-                    VarsMemory.ElementAt(specifyContextLevel)[varName] = value;
+                temp = context.Get(varName, null);
+                if (temp != null)
+                {
+                    context.Set(varName, value);
+                    return;
+                }
+                context = context.Prev;
             }
+
+            this.curretContext.Set(varName, value);
         }
 
-        public DynamicValue GetVar(string varName, DynamicValue def = null)
+        public DynamicValue GetVar(string varName, DynamicValue def = null, VarContext context = null)
         {
             varName = varName.ToLower();
 
@@ -425,80 +436,61 @@ namespace PortableVM
                 
                 return new DynamicValue(result);
             }
-            
-            if (VarsMemory.Count == 0)
-                return def;
-
-            var index = "\"'`´".IndexOf(varName[0]);
-            var character = varName[0];
 
 
             if (varName[0] == '_')
-            {
-                //uses the root memory table
-                if (VarsMemory.ElementAt(0).ContainsKey(varName))
-                    return VarsMemory.ElementAt(0)[varName];
-                else
-                    return def;
-            }
+                return rootContext.Get(varName, def);
             else
             {
-                int currVarsMemoryPos = VarsMemory.Count-1;
-                while (currVarsMemoryPos >= 0)
+
+
+                if (context == null)
+                    context = curretContext;
+
+                DynamicValue temp = null;
+                while (context != null)
                 {
-                    var temp = VarsMemory.ElementAt(currVarsMemoryPos);
-                    //loking by variable in all memory tables (in descent order)
-                    //if (VarsMemory.ElementAt(currVarsMemoryPos).ContainsKey(varName))
-                    if (temp.ContainsKey(varName))
-                    {
-                        //return VarsMemory.ElementAt(currVarsMemoryPos)[varName];
-                        
-                        return temp[varName];
-                    }
-                    
-                    currVarsMemoryPos--;
-                }
+                    temp = context.Get(varName, null);
+                    if (temp != null)
+                        return temp;
+
+                    context = context.Prev;
                 
+                }
                 return def;
             }
             
         }
         
-        public void DelVar(string varName)
+        public void DelVar(string varName, VarContext context = null)
         {
             varName = varName.ToLower();
             
-            if (VarsMemory.Count == 0)
-                return;
             
             if (varName[0] == '_')
             {
-                //uses the root memory table
-                if (VarsMemory.ElementAt(0).ContainsKey(varName))
-                    VarsMemory.ElementAt(0).Remove(varName);
+                rootContext.Del(varName);
             }
             else
             {
-                int currVarsMemoryPos = VarsMemory.Count-1;
-                while (currVarsMemoryPos >= 0)
+                if (context == null)
+                    context = curretContext;
+
+                DynamicValue temp = null;
+                while (context != null)
                 {
-                    var temp = VarsMemory.ElementAt(currVarsMemoryPos);
-                    //loking by variable in all memory tables (in descent order)
-                    //if (VarsMemory.ElementAt(currVarsMemoryPos).ContainsKey(varName))
-                    if (temp.ContainsKey(varName))
+                    temp = context.Get(varName, null);
+                    if (temp != null)
                     {
-                        temp.Remove(varName);
+                        context.Del(varName);
                         return;
                     }
-                    
-                    currVarsMemoryPos--;
+
+                    context = context.Prev;
+
                 }
             }
-            
         }
-        
-        
-        
     }
 
     public class Instruction
