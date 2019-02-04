@@ -87,8 +87,20 @@ namespace PortableVM.Libs
         {
             return null;
         }
-        
-        
-        
+
+        public object ToLowerCase(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            return solvedArgs[0].AsString.ToLower();
+        }
+
+        public object ToUpperCase(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            return solvedArgs[0].AsString.ToUpper();
+        }
+
+
+
+
+
     }
 }

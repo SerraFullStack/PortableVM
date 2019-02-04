@@ -461,6 +461,8 @@ namespace PortableVM.Libs
             var lockCurrVm = true;
             int parentStackSize = -1;
             Stack<int> parentStack = null;
+
+            //!!!!!!%%%%%% Change to use RunBeforeNextClock instead of pause
             destThread.pause(() => {
 
                 ((Standard)destThread.GetLibs()["standard"]).Call(arguments, solvedArgs, ref destThread.ip);
@@ -487,6 +489,8 @@ namespace PortableVM.Libs
             var lockCurrVm = true;
             int parentStackSize = -1;
             Stack<int> parentStack = null;
+
+            //!!!!!!%%%%%% Change to use RunBeforeNextClock instead of pause
             destThread.pause(() => {
 
                 ((Standard)destThread.GetLibs()["standard"]).Call(arguments, solvedArgs, ref destThread.ip);

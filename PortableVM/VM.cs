@@ -49,6 +49,22 @@ namespace PortableVM
         //the next of rootContext doest not handle for anything (is null)
         public VarContext rootContext = new VarContext();
         public VarContext curretContext;
+
+
+        //current instruction pointer
+        public int ip = 0;
+
+        //contains the amount of runned instructions
+        public UInt64 totalRunnedInstructions = 0;
+
+
+        //This variable is used to pause thread without using Sleeps while waiting for resume.
+        Semaphore pauseSempahore = new Semaphore(1, 1);
+
+        public List<Action> RunBeforeNextClock = new List<Action>();
+
+
+
         public VM(OnUnknownInstruction onUnknownInstruction = null)
         {
             curretContext = new VarContext();
@@ -102,6 +118,9 @@ namespace PortableVM
 
         public void pause(Action onPaused)
         {
+            if (this.paused)
+                return;
+
             this.onPausedActions.Add(onPaused);
             this.requestPause = true;
 
@@ -111,8 +130,11 @@ namespace PortableVM
         {
             this.requestPause = false;
             this.paused = false;
+            pauseSempahore.Release();
         }
 
+
+        //this code "compiles" (parses) the code and add instructions to vm
         public void addCode(List<string> lines)
         {
             List<string> currLine;
@@ -143,12 +165,41 @@ namespace PortableVM
                         currLine.RemoveAt(c);
                 }
 
-                //convert attribuitions to normal instruction call + "set [variable] _return"
+                //[Transpilation code] convert attribuitions to normal instruction call + "set [variable] _return"
                 if ((currLine.Count > 1) && (currLine[1] == "="))
                 {
                     lines.Insert(contLines + 1, "set " + currLine[0] + " _return");
                     currLine.RemoveAt(0);
                     currLine.RemoveAt(0);
+                }
+
+                //[Transpilation code] Convert Async lines in a thread call
+                if ((currLine.Count > 1) && (currLine[0].ToLower() == "async"))
+                {
+
+                    int tempInt = 0;
+                    var labelName = "__Thread__" + ((Libs.Standard)this.libs["standard"]).GetNewId(new List<DynamicValue>(), new List<DynamicValue>(), ref tempInt);
+                    var destLabel = currLine[1];
+                    var commandLine = "";
+                    for (int tempC = 2; tempC < currLine.Count; tempC++)
+                        commandLine += currLine[tempC] + " ";
+
+                    List<string> tempLines = new List<string>();
+                    tempLines.Add("StarThread " + labelName);
+                    tempLines.Add("goto " + labelName + "_continue");
+                    tempLines.Add("_nc_ " + labelName);
+                    tempLines.Add(commandLine);
+                    tempLines.Add("set tempRet _return");
+                    tempLines.Add("ParentThreadCall tempRet");
+                    tempLines.Add("finish");
+                    tempLines.Add("return");
+                    tempLines.Add("_nc_ "+labelName+"_continue");
+
+                    lines.InsertRange(contLines + 1, tempLines);
+
+                    //clear currentLine
+                    currLine.Clear();
+                    lines[contLines] = "";
                 }
 
                 if (currLine.Count > 0)
@@ -274,28 +325,31 @@ namespace PortableVM
 
         }
 
-        //current instruction pointer
-        public int ip = 0;
-        
-        //contains the amount of runned instructions
-        public UInt64 totalRunnedInstructions = 0;
-
-        
         public DynamicValue Run(bool waitEnd = false)
         {
             bool ended = false;
             this.SetVar(Consts._VMRUNRESULT, new DynamicValue(-1));
 
-            Thread th = new Thread(delegate ()
+            //Thread th = new Thread(delegate ()
+            Task tk = new Task(delegate()
             {
                this.totalRunnedInstructions = 0;
-                int nextIp = 0; ;
+                int nextIp = 0;
                while (ip < code.Count)
                {
                     if (paused)
                     {
-                        Thread.Sleep(1);
+                        pauseSempahore.WaitOne();
                         continue;
+                    }
+
+                    //run action before the clock
+                    if (RunBeforeNextClock.Count > 0)
+                    {
+                        foreach (var action in RunBeforeNextClock)
+                            action.Invoke();
+
+                        RunBeforeNextClock.Clear();
                     }
 
                     this.totalRunnedInstructions++;
@@ -312,6 +366,7 @@ namespace PortableVM
 
                     if (requestPause)
                     {
+                        pauseSempahore.WaitOne();
                         paused = true;
                         foreach (var c in onPausedActions)
                             c.Invoke();
@@ -320,10 +375,11 @@ namespace PortableVM
 
                     }
                }
-               ended = true;
+               ended = true;    
            });
+            tk.Start();
 
-            th.Start();
+//            th.Start();
             
             while (waitEnd && !ended)
             {
@@ -490,6 +546,34 @@ namespace PortableVM
 
                 }
             }
+        }
+
+        /// <summary>
+        /// This method can be used to recycle a VM instance
+        /// </summary>
+        public void clearVM()
+        {
+            //Contains the processed code
+            this.code.Clear();
+
+            this.namedCodePointers.Clear();
+
+            paused = false;
+            onPausedActions.Clear();
+
+            requestPause = false;
+
+            //the next of rootContext doest not handle for anything (is null)
+            rootContext = new VarContext();
+            curretContext = new VarContext();
+            curretContext.Prev = rootContext;
+
+
+            ip = 0;
+            totalRunnedInstructions = 0;
+            pauseSempahore = new Semaphore(1, 1);
+            RunBeforeNextClock.Clear();
+
         }
     }
 
