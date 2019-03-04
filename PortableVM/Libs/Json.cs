@@ -40,7 +40,7 @@ namespace PortableVM.Libs
             //get the object identification
             string objectId = solvedArgs[0].AsString;
             string property = solvedArgs[1].AsString;
-            string value = solvedArgs[1].AsString;
+            string value = solvedArgs[2].AsString;
 
             this.instances[objectId].set(property, value);
 
