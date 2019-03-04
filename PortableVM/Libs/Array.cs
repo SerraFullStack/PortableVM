@@ -23,13 +23,24 @@ namespace PortableVM.Libs
         
         public object Create(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
         {
+            //add some empty variables to garant that argument and solveArgs will contains two firsts values and prevent 
+            //long codes to treat args missing
+            arguments.Add(new DynamicValue(""));
+            arguments.Add(new DynamicValue(""));
+            solvedArgs.Add(new DynamicValue(""));
+            solvedArgs.Add(new DynamicValue(""));
+
             List<DynamicValue> objectCreateArgs = new List<DynamicValue>();
             objectCreateArgs.Add(new DynamicValue("")); //no className
-            objectCreateArgs.Add(new DynamicValue(arguments[0].AsString)); //array variable name
+
+            if (arguments.Count > 0)
+                objectCreateArgs.Add(new DynamicValue(arguments[0].AsString)); //array variable name
             
-            string objectId = (string)((Libs.Object)vm.GetLibs()["object"]).Create(arguments, solvedArgs, ref nextIp);
+
+            //create the object
+            string objectId = (string)((Libs.Object)vm.GetLibs()["object"]).Create(objectCreateArgs, objectCreateArgs, ref nextIp);
             
-            //create the "length" property
+            //create the "length" property with value '0'
             List<DynamicValue> propArgs = new List<DynamicValue>{
                 new DynamicValue(objectId),
                 new DynamicValue("length"),
@@ -52,7 +63,7 @@ namespace PortableVM.Libs
             };
             var length = (DynamicValue)((Libs.Object)vm.GetLibs()["object"]).GetProperty(propArgs, propArgs, ref nextIp);
             
-            return length.AsInt;
+            return length;
         }
         
         public object GetAt(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
@@ -162,6 +173,15 @@ namespace PortableVM.Libs
                 new DynamicValue(objectRef),
                 new DynamicValue(length),
                 value
+            };
+            ((Libs.Object)vm.GetLibs()["object"]).SetProperty(propArgs, propArgs, ref nextIp);
+
+
+            //increase length property
+            propArgs = new List<DynamicValue>{
+                new DynamicValue(objectRef),
+                new DynamicValue("length"),
+                new DynamicValue(length+1)
             };
             ((Libs.Object)vm.GetLibs()["object"]).SetProperty(propArgs, propArgs, ref nextIp);
 

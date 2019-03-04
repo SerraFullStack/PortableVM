@@ -82,6 +82,30 @@ namespace PortableVM.Libs
             return null;
         }
 
+        public object GetChildsNames(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
+        {
+            //get the object identification
+            string objectId = solvedArgs[0].AsString;
+            string property = solvedArgs[1].AsString;
+
+            var childNames = this.instances[objectId].getChildsNames(property);
+
+            //create new Array
+            string arrayId = (string)((Array)vm.GetLibs()["array"]).Create(new List<DynamicValue>(), new List<DynamicValue>(), ref nextIp);
+
+            //create array data (each position will contains a childName)
+            foreach (var c in childNames)
+            {
+                var addArgs = (new DynamicValue[] { new DynamicValue(arrayId), new DynamicValue(c) }).ToList();
+                ((Array)vm.GetLibs()["array"]).Add(
+                    addArgs,
+                    addArgs, 
+                    ref nextIp);
+            }
+
+            return arrayId;
+        }
+
         public object Serialize(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
         {
             string objectId = solvedArgs[0].AsString;

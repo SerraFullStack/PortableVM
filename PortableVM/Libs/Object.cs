@@ -24,40 +24,51 @@ namespace PortableVM.Libs
         //create ClassName variableName constructor_arg1 constructor_ar2
         public object Create(List<DynamicValue> arguments, List<DynamicValue> solvedArgs, ref int nextIp)
         {
+            //add some empty variables to garant that argument and solveArgs will contains two firsts values and prevent 
+            //long codes to treat args missing
+            arguments.Add(new DynamicValue(""));
+            arguments.Add(new DynamicValue(""));
+            solvedArgs.Add(new DynamicValue(""));
+            solvedArgs.Add(new DynamicValue(""));
+
+
             string className = arguments[0].AsString;
             string objectId = (string)((Standard)vm.GetLibs()["standard"]).GetNewId(arguments, solvedArgs, ref nextIp);
+
             //store the object id in the sugested variable (argument 1)
-            vm.SetVar(arguments[1].AsString, new DynamicValue(objectId));
+            if (arguments[1].AsString != "")
+                vm.SetVar(arguments[1].AsString, new DynamicValue(objectId));
+
             //store metadata about object
-                //store the object className
-                vm.SetVar(objectId + ".className", new DynamicValue(className), vm.rootContext);
+            //store the object className
+            vm.SetVar(objectId + ".className", new DynamicValue(className), vm.rootContext);
                 
-                //prepare the constructor arguments (reuse the arguments and solvedArgs)
+            //prepare the constructor arguments (reuse the arguments and solvedArgs)
                 
-                //add reference to this as first constructor argument
-                arguments[0].AsString = objectId;
-                solvedArgs[0].AsString = objectId;
+            //add reference to this as first constructor argument
+            arguments[0].AsString = objectId;
+            solvedArgs[0].AsString = objectId;
                 
                 
-                //checks if exists a named code called className + ".constructor" or (classname + "." + className)
-                if (vm.namedCodePointers.ContainsKey(className + ".constructor"))
-                {
-                    //replace seconds value of arguments with the named code indentification
-                    arguments[1].AsString = "constructor";
-                    solvedArgs[1].AsString = "constructor";
+            //checks if exists a named code called className + ".constructor" or (classname + "." + className)
+            if (vm.namedCodePointers.ContainsKey(className + ".constructor"))
+            {
+                //replace seconds value of arguments with the named code indentification
+                arguments[1].AsString = "constructor";
+                solvedArgs[1].AsString = "constructor";
                     
-                    //Call the "call" of this class
-                    this.Call(arguments, solvedArgs, ref nextIp);
-                }
-                else if (vm.namedCodePointers.ContainsKey(className + "."+className))
-                {
-                    //replace seconds value of arguments with the named code indentification
-                    arguments[1].AsString = className;
-                    solvedArgs[1].AsString = className;
+                //Call the "call" of this class
+                this.Call(arguments, solvedArgs, ref nextIp);
+            }
+            else if (vm.namedCodePointers.ContainsKey(className + "."+className))
+            {
+                //replace seconds value of arguments with the named code indentification
+                arguments[1].AsString = className;
+                solvedArgs[1].AsString = className;
                     
-                    //Call the "call" of this class
-                    this.Call(arguments, solvedArgs, ref nextIp);
-                }
+                //Call the "call" of this class
+                this.Call(arguments, solvedArgs, ref nextIp);
+            }
                 
             return objectId;
         }
@@ -109,19 +120,24 @@ namespace PortableVM.Libs
         {
             //get the object identification
             string objectId = solvedArgs[0].AsString;
-            
+            string methodName = solvedArgs[1].AsString;
+
             //get the object className
-            vm.GetVar(objectId + ".className", new DynamicValue(""));
-            string className = solvedArgs[1].AsString;
-            
-            //determine the real namedCode (class name + namedCode)
-            string NamedCodeToCall = className + "." + solvedArgs[1];
-            solvedArgs[0].AsString = NamedCodeToCall;
-            arguments[0].AsString = NamedCodeToCall;
-            
-            //the second argument must be a pointer to object
-            solvedArgs[1].AsString = objectId;
-            arguments[1].AsString = objectId;
+            string className = vm.GetVar(objectId + ".className", new DynamicValue("")).AsString;
+
+
+            //parape parameters to run "standard.call" instruction
+            {
+                //determine the real namedCode (class name + namedCode) to be sented to instruction call
+                string NamedCodeToCall = className + "." + methodName;
+                solvedArgs[0].AsString = NamedCodeToCall;
+                arguments[0].AsString = NamedCodeToCall;
+
+                //Turn parameter 1 to an pointer to object (to make second argument of call a pointer to 
+                //object. With this, user can use keyword like 'this' or 'self' to refer to the object)
+                solvedArgs[1].AsString = objectId;
+                arguments[1].AsString = objectId;
+            }
                 
             return ((Standard)vm.GetLibs()["standard"]).Call(arguments, solvedArgs, ref nextIp);
         }
